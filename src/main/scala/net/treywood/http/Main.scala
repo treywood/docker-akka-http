@@ -6,8 +6,6 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
 import akka.stream.ActorMaterializer
 
-import scala.concurrent.ExecutionContextExecutor
-
 object Main extends App {
 
   override def main(args: Array[String]): Unit = {
@@ -18,12 +16,15 @@ object Main extends App {
     import system.dispatcher
 
     val routes =
-      pathEndOrSingleSlash {
-        getFromDirectory("/Users/woode/workspace/docker-akka-http/src/main/webapp")
-      } ~ get {
+      get {
         path("hello") {
           complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, "<h1>Hello World</h1>"))
         }
+      } ~ pathPrefix("") {
+        pathEndOrSingleSlash {
+          getFromFile("app/webapp/index.html")
+        } ~
+        getFromDirectory("app/webapp")
       }
 
     Http().bindAndHandle(routes, "0.0.0.0", 8080)

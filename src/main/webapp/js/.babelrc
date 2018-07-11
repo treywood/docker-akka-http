@@ -1,0 +1,14 @@
+{
+  "compact": "true",
+  "presets": [
+    ["babel-preset-env", {
+      "modules": false,
+      "targets": { "browsers": ["last 2 versions", "IE > 9"] }
+    }]
+  ],
+  "plugins": [
+    "transform-object-rest-spread",
+    "babel-plugin-transform-decorators-legacy",
+    "babel-plugin-transform-class-properties"
+  ]
+}

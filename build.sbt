@@ -23,6 +23,7 @@ dockerfile in docker := {
     val dockerAppPath = "/app/"
     val mainClassString = (mainClass in Compile).value.get
     val classpath = (fullClasspath in Compile).value
+
     from("java")
     add(classpath.files, dockerAppPath)
     entryPoint("java", "-cp", s"$dockerAppPath:$dockerAppPath/*", s"$mainClassString")

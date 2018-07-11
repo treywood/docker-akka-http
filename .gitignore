@@ -1,2 +1,5 @@
 .idea
 target
+
+node_modules
+src/main/webapp/dist
