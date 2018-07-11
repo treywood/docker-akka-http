@@ -19,6 +19,8 @@ object Main extends App {
       get {
         path("hello") {
           complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, "<h1>Hello World</h1>"))
+        } ~ path("datas") {
+          complete(HttpEntity(ContentTypes.`application/json`, """{"name":"Trey"}"""))
         }
       } ~ pathPrefix("") {
         pathEndOrSingleSlash {

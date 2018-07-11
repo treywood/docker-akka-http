@@ -23,6 +23,7 @@
     "webpack-cli": "^3.0.8"
   },
   "dependencies": {
+    "unfetch": "^3.0.0",
     "vue": "^2.5.16",
     "vue-property-decorator": "^7.0.0"
   }

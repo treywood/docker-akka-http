@@ -48,7 +48,8 @@ module.exports = {
 
     plugins: [
         new webpack.ProvidePlugin({
-            'Vue': 'vue'
+            'Vue': 'vue',
+            'fetch': 'unfetch'
         }),
         new HtmlWebpackPlugin({
             template: path.resolve(__dirname, 'src/main/webapp/index.html')
