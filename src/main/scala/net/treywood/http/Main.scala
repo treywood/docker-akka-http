@@ -1,13 +1,12 @@
 package net.treywood.http
 
+import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
-import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 
 import scala.concurrent.ExecutionContextExecutor
-import scala.io.StdIn
 
 object Main extends App {
 
@@ -16,20 +15,19 @@ object Main extends App {
     implicit val system: ActorSystem = ActorSystem("http-server")
     implicit val materializer: ActorMaterializer = ActorMaterializer()
 
-    implicit val dispatcher: ExecutionContextExecutor = system.dispatcher
+    import system.dispatcher
 
-    val routes = get {
-      path("hello") {
-        complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, "<h1>Hello World</h1>"))
+    val routes =
+      pathEndOrSingleSlash {
+        getFromDirectory("/Users/woode/workspace/docker-akka-http/src/main/webapp")
+      } ~ get {
+        path("hello") {
+          complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, "<h1>Hello World</h1>"))
+        }
       }
-    }
 
-    val binding = Http().bindAndHandle(routes, "localhost", 8080)
-
+    Http().bindAndHandle(routes, "0.0.0.0", 8080)
     println("Server running")
-    StdIn.readLine()
-
-    binding.flatMap(_.unbind()).onComplete(_ => system.terminate())
   }
 
 }

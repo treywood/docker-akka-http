@@ -1,0 +1,9 @@
+version: '3'
+services:
+  web:
+    image: docker-akka-http:0.0.1
+    environment:
+        JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005
+    ports:
+      - "8080:8080"
+      - "5005:5005"
