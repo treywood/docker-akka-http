@@ -4,7 +4,8 @@ const VueLoaderPlugin = require('vue-loader/lib/plugin');
 const webpack = require('webpack');
 const path = require('path');
 
-const context = path.resolve(__dirname, './src/main/webapp/js');
+const _path = process.env.SRC_PATH || './src/main/webapp';
+const context = path.resolve(__dirname, _path + '/js');
 
 module.exports = {
 
@@ -23,7 +24,7 @@ module.exports = {
     entry: 'index.js',
 
     output: {
-        path: path.resolve(__dirname, 'src/main/webapp/dist'),
+        path: path.resolve(__dirname, 'webapp-dist'),
         filename: 'bundle.js'
     },
 
@@ -52,7 +53,7 @@ module.exports = {
             'fetch': 'unfetch'
         }),
         new HtmlWebpackPlugin({
-            template: path.resolve(__dirname, 'src/main/webapp/index.html')
+            template: path.resolve(__dirname, _path + '/index.html')
         }),
         new VueLoaderPlugin()
     ],

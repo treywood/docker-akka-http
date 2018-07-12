@@ -8,6 +8,8 @@ import akka.stream.ActorMaterializer
 
 object Main extends App {
 
+  lazy val PORT = 8080
+
   override def main(args: Array[String]): Unit = {
 
     implicit val system: ActorSystem = ActorSystem("http-server")
@@ -29,7 +31,7 @@ object Main extends App {
         getFromDirectory("app/webapp")
       }
 
-    Http().bindAndHandle(routes, "0.0.0.0", 8080)
+    Http().bindAndHandle(routes, "0.0.0.0", PORT)
     println("Server running")
   }
 
