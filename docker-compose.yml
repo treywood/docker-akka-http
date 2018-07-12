@@ -3,7 +3,7 @@ services:
   web:
     image: docker-akka-http:0.0.1
     volumes:
-      - ./webapp-dist:/app/webapp
+      - ./src/main/webapp/assets:/app/webapp
     environment:
         JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005
     ports:

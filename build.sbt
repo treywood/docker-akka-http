@@ -2,6 +2,8 @@ import Dependencies._
 import sbt.Keys._
 import sbt._
 
+import scala.sys.process._
+
 name := "docker-akka-http"
 version := "0.0.1"
 
@@ -26,28 +28,21 @@ dockerfile in docker := {
     System.getenv("ONESOURCE_UI_DEV") == "true" ||
       System.getenv("ONESOURCE_SKIP_UI_COMPILE") == "true"
 
+  if (!skipUiCompile) {
+    "yarn build" !
+  }
+
   new Dockerfile {
+
     val dockerAppPath = "/app/"
+
     val mainClassString = (mainClass in Compile).value.get
     val classpath = (fullClasspath in Compile).value
 
     from("java")
-    from("node:8")
+
     add(classpath.files, dockerAppPath)
-
-    env("SRC_PATH", "./src")
-
-    copy(baseDirectory(_ / "package.json").value, "./")
-    copy(baseDirectory(_ / "yarn.lock").value, "./")
-    copy(baseDirectory(_ / "webpack.config.js").value, "./")
-    copy(baseDirectory(_ / "webpack.prod.js").value, "./")
-
-    run("mkdir", "src")
-    copy(dirFiles(baseDirectory(_ / "src" / "main" / "webapp").value), "/src/")
-    run("ls", "-l", "src")
-
-    run("yarn", "--pure-lockfile")
-    run("yarn", "build")
+    add(baseDirectory(_ / "target" / "app.tar.gz").value, "/app/webapp")
 
     entryPoint("java", "-cp", s"$dockerAppPath:$dockerAppPath/*", s"$mainClassString")
   }

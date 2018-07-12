@@ -24,7 +24,7 @@ module.exports = {
     entry: 'index.js',
 
     output: {
-        path: path.resolve(__dirname, 'webapp-dist'),
+        path: path.resolve(__dirname, 'src/main/webapp/assets'),
         filename: 'bundle.js'
     },
 
