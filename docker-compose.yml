@@ -1,7 +1,7 @@
 version: '3'
 services:
   web:
-    image: docker-akka-http:0.0.1
+    image: edwinjwood/docker-akka-http:latest<skipPull>
     volumes:
       - ./src/main/webapp/assets:/app/webapp
     environment:

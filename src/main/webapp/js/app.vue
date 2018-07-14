@@ -1,19 +1,25 @@
 <template>
-    <h1>Hello from {{name}}!!</h1>
+    <div>
+        <input type="text" v-model.lazy="name" />
+        <h1>{{greeting}}!!</h1>
+    </div>
 </template>
 
 <script>
-    import { Component } from 'vue-property-decorator';
+    import { Component, Watch } from 'vue-property-decorator';
     import fetch from 'unfetch';
 
     @Component()
     export default class App extends Vue {
 
-        name = '...';
+        name = 'you';
+        greeting = 'Hi you';
 
-        mounted() {
-          fetch('/datas').then(res => res.json())
-            .then(({ name }) => this.name = name)
+        @Watch('name')
+        update() {
+          //
+          fetch(`/api/greet?name=${this.name}`).then(res => res.text())
+            .then(g => this.greeting = g);
         }
 
     }

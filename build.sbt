@@ -5,7 +5,7 @@ import sbt._
 import scala.sys.process._
 
 name := "docker-akka-http"
-version := "0.0.1"
+version := "0.0.2"
 
 scalaVersion := "2.12.0"
 

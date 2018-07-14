@@ -2,9 +2,10 @@ package net.treywood.http
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
 import akka.stream.ActorMaterializer
+//import net.treywood.http.apis.Api._
+import net.treywood.http.apis.GreetApi
 
 object Main extends App {
 
@@ -18,13 +19,7 @@ object Main extends App {
     import system.dispatcher
 
     val routes =
-      get {
-        path("hello") {
-          complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, "<h1>Hello World!!</h1>"))
-        } ~ path("datas") {
-          complete(HttpEntity(ContentTypes.`application/json`, """{"name":"Trey"}"""))
-        }
-      } ~ pathPrefix("") {
+      GreetApi ~ pathPrefix("") {
         pathEndOrSingleSlash {
           getFromFile("app/webapp/index.html")
         } ~
