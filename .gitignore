@@ -1,6 +1,7 @@
 .DS_Store
 
 .idea
+.webpack-cache
 target
 
 node_modules

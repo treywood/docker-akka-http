@@ -1,10 +1,15 @@
 package net.treywood.http.apis
 
+import java.util.concurrent.TimeUnit
+
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.RouteConcatenation.RouteWithConcatenation
 import akka.http.scaladsl.server.{PathMatcher, Route}
+import akka.util.Timeout
 
 abstract class Api[L](pm: PathMatcher[L]) {
+
+  implicit val timeout = Timeout(5L, TimeUnit.SECONDS)
 
   private var _route: Route = _
 
@@ -17,5 +22,6 @@ abstract class Api[L](pm: PathMatcher[L]) {
 }
 
 object Api {
-  implicit def toRoute[L](api: Api[L]): RouteWithConcatenation = api.route
+  implicit def toRouteConcatentation[L](api: Api[L]): RouteWithConcatenation = api.route
+  implicit def toRoute[L](api: Api[L]): Route = api.route
 }

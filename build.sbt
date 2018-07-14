@@ -24,13 +24,7 @@ dockerImageCreationTask := docker.value
 
 dockerfile in docker := {
 
-  val skipUiCompile =
-    System.getenv("ONESOURCE_UI_DEV") == "true" ||
-      System.getenv("ONESOURCE_SKIP_UI_COMPILE") == "true"
-
-  if (!skipUiCompile) {
-    "yarn build" !
-  }
+  "yarn build" !
 
   new Dockerfile {
 

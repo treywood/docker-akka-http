@@ -1,7 +1,7 @@
 <template>
     <div>
         <input type="text" v-model.lazy="name" />
-        <h1>{{greeting}}!!</h1>
+        <h1>{{greeting}}</h1>
     </div>
 </template>
 

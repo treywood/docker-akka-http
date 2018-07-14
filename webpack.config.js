@@ -1,5 +1,6 @@
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const VueLoaderPlugin = require('vue-loader/lib/plugin');
+const HardSourcePlugin = require('hard-source-webpack-plugin');
 
 const webpack = require('webpack');
 const path = require('path');
@@ -48,6 +49,9 @@ module.exports = {
     },
 
     plugins: [
+        new HardSourcePlugin({
+            cacheDirectory: '.webpack-cache'
+        }),
         new webpack.ProvidePlugin({
             'Vue': 'vue',
             'fetch': 'unfetch'
