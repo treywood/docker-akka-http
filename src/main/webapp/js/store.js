@@ -1,5 +1,20 @@
 import Vuex from 'vuex';
 
+import ApolloClient from 'apollo';
+import { createHttpLink } from 'apollo-link-http';
+import { InMemoryCache } from 'apollo-cache-inmemory';
+import { GetToDos } from './queries.graphql';
+
+const apollo = new ApolloClient({
+  link: createHttpLink({
+    uri: '/graphql',
+    fetchOptions: {
+      fetchPolicy: 'no-cache'
+    }
+  }),
+  cache: new InMemoryCache()
+});
+
 export default new Vuex.Store({
 
   state: {
@@ -23,8 +38,10 @@ export default new Vuex.Store({
 
   actions: {
     async fetch({ commit }) {
-      const todos = await fetch('/api/todo').then(r => r.json());
-      commit('reset', todos);
+      return apollo.query({ query: GetToDos }).then(({ data }) => {
+        commit('reset', data.todos);
+        return data.todos;
+      });
     }
   }
 

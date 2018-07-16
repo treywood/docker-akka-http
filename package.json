@@ -28,6 +28,10 @@
     "zip-webpack-plugin": "^3.0.0"
   },
   "dependencies": {
+    "apollo-cache-inmemory": "^1.2.5",
+    "apollo-client": "^2.3.5",
+    "apollo-link-http": "^1.5.4",
+    "graphql-tag": "^2.9.2",
     "unfetch": "^3.0.0",
     "vue": "^2.5.16",
     "vue-property-decorator": "^7.0.0"
