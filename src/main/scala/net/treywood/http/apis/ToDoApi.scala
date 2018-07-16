@@ -4,7 +4,9 @@ import akka.http.scaladsl.model.HttpResponse
 import akka.http.scaladsl.server.Directives._
 import akka.pattern.ask
 import net.treywood.actor.ToDoActor
+import net.treywood.graphql.Context
 import net.treywood.http.{JsonSupport, Main}
+import sangria.schema.{Field, ObjectType, fields, StringType, BooleanType}
 import spray.json.{JsBoolean, JsString, JsValue}
 
 import scala.concurrent.Await
@@ -42,5 +44,14 @@ object ToDoApi extends Api("api" / "todo") with JsonSupport {
   }
 
   case class ToDoItem(id: String, label: String, done: Boolean = false)
+
+  lazy val ToDoItemType = ObjectType(
+    "ToDoItem",
+    () => fields[Context, ToDoItem](
+      Field("id", StringType, resolve = _.value.id),
+      Field("label", StringType, resolve = _.value.label),
+      Field("done", BooleanType, resolve = _.value.done)
+    )
+  )
 
 }

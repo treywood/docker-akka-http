@@ -4,7 +4,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives._
 import akka.stream.ActorMaterializer
-import net.treywood.http.apis.ToDoApi
+import net.treywood.http.apis.{GraphQLApi, ToDoApi}
 //import net.treywood.http.apis.Api._
 import net.treywood.http.apis.GreetApi
 
@@ -22,6 +22,7 @@ object Main extends App {
     val routes =
       GreetApi ~
       ToDoApi ~
+      GraphQLApi ~
       pathPrefix("") {
         pathEndOrSingleSlash {
           getFromFile("app/webapp/index.html")

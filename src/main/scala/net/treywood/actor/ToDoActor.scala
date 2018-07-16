@@ -41,6 +41,8 @@ object ToDoActor {
     items.get(id)
   }
 
+  def getAll = items.values
+
   private var items = Map.empty[String, ToDoItem]
 
   lazy val props = Props[ToDoActor]
