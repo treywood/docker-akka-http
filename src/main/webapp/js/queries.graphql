@@ -1,5 +1,31 @@
+fragment ToDoFields on ToDoItem {
+    id label done
+}
+
 query GetToDos {
     todos {
-        id label done
+        ...ToDoFields
+    }
+}
+
+subscription WatchToDos {
+    todos {
+        ...ToDoFields
+    }
+}
+
+mutation AddItem($label: String!) {
+    item: createToDoItem(label: $label) {
+        ...ToDoFields
+    }
+}
+
+mutation DeleteItem($id: String!) {
+    deleted: deleteToDoItem(id: $id)
+}
+
+mutation UpdateItem($id: String!, $done: Boolean!) {
+    item: updateToDoItem(id: $id, done: $done) {
+        ...ToDoFields
     }
 }

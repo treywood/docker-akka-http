@@ -12,10 +12,9 @@ object Main extends App {
 
   lazy val PORT = 8080
   lazy implicit val system: ActorSystem = ActorSystem("http-server")
+  lazy implicit val materializer: ActorMaterializer = ActorMaterializer()
 
   override def main(args: Array[String]): Unit = {
-
-    implicit val materializer: ActorMaterializer = ActorMaterializer()
 
     import system.dispatcher
 

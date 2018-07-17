@@ -1,15 +1,23 @@
 package net.treywood.graphql
 
+import akka.stream.scaladsl.Source
 import net.treywood.actor.ToDoActor
 import net.treywood.http.apis.ToDoApi.ToDoItemType
-import sangria.schema.{Argument, Field, ListType, StringType, BooleanType, OptionType, ObjectType, fields}
+import sangria.schema.{Action, Argument, BooleanType, Field, ListType, ObjectType, OptionType, OutputType, StringType, Value, fields}
+import sangria.streaming.akkaStreams._
 
 object Schema {
+
+  import net.treywood.http.Main.system.dispatcher
+  import net.treywood.http.Main.materializer
 
   lazy val Query = ObjectType(
     "Query",
     () => fields[Context, Unit](
-      Field("todos", ListType(ToDoItemType), resolve = _ => ToDoActor.getAll.toList)
+      Field("todos", ListType(ToDoItemType), resolve = _ => {
+        println("gettin em")
+        ToDoActor.getAll.toList
+      })
     )
   )
 
@@ -44,6 +52,17 @@ object Schema {
     )
   )
 
-  lazy val Schema = sangria.schema.Schema(Query, Some(Mutation))
+  lazy val Subscription = ObjectType(
+    "Subscription",
+    () => fields[Context, Unit](
+      Field.subs("todos", ListType(ToDoItemType),
+        resolve = _ => Source.single(Value(ToDoActor.getAll)) ++ ToDoActor.newSubscription[Context]
+      )
+    )
+  )
+
+  lazy val Schema = sangria.schema.Schema(Query, mutation = Some(Mutation), subscription = Some(Subscription))
+
+  case class SubscriptionMessage[Ctx, Out](fieldType: OutputType[Out], value: Action[Ctx, Out])
 
 }

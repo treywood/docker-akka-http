@@ -6,7 +6,7 @@ import net.treywood.http.apis.ToDoApi.ToDoItem
 
 import scala.util.Random
 
-object ToDoActor {
+object ToDoActor extends GraphQLSubscription[Seq[ToDoItem]] {
 
   case class NewItem(label: String)
   case class ToggleDone(id: String, done: Boolean)
@@ -16,32 +16,32 @@ object ToDoActor {
   def addItem(label: String) = {
     val newId = Random.alphanumeric.take(10).mkString
     val newItem = ToDoItem(newId, label)
-    items += (newId -> newItem)
 
-    Thread.sleep(2000)
+    items += (newId -> newItem)
+    broadcast(getAll)
     newItem
   }
 
   def deleteItem(id: String) = {
-    Thread.sleep(1000)
     items -= id
+    broadcast(getAll)
   }
 
   def toggleDone(id: String, done: Boolean) = {
-    Thread.sleep(500)
-    items.get(id).map({ item =>
+    val item = items.get(id).map({ item =>
       val updated = item.copy(done = done)
       items = items.updated(id, updated)
       updated
     })
+    broadcast(getAll)
+    item
   }
 
   def fetchItem(id: String) = {
-    Thread.sleep(1000)
     items.get(id)
   }
 
-  def getAll = items.values
+  def getAll = items.values.toSeq
 
   private var items = Map.empty[String, ToDoItem]
 

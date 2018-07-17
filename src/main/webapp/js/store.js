@@ -1,17 +1,39 @@
 import Vuex from 'vuex';
 
-import ApolloClient from 'apollo';
+import ApolloClient from 'apollo-client';
 import { createHttpLink } from 'apollo-link-http';
 import { InMemoryCache } from 'apollo-cache-inmemory';
-import { GetToDos } from './queries.graphql';
+import { GetToDos, AddItem, DeleteItem, UpdateItem, WatchToDos } from './queries.graphql';
+import fetch from 'unfetch';
+import { WebSocketLink } from 'apollo-link-ws';
+import { SubscriptionClient } from 'subscriptions-transport-ws';
+import { RetryLink } from 'apollo-link-retry';
+import find from 'lodash/find';
+
+Vue.use(Vuex);
+
+const http = createHttpLink({
+  uri: '/graphql',
+  fetch: fetch,
+  fetchOptions: {
+    fetchPolicy: 'no-cache'
+  }
+});
+
+const ws =  new WebSocketLink(
+  new SubscriptionClient('ws://localhost:8080/graphql', { reconnect: true })
+);
+
 
 const apollo = new ApolloClient({
-  link: createHttpLink({
-    uri: '/graphql',
-    fetchOptions: {
-      fetchPolicy: 'no-cache'
-    }
-  }),
+  link: new RetryLink().split(
+    ({ query }) => {
+      const main = find(query.definitions, { kind: 'OperationDefinition' });
+      return main && main.operation === 'subscription'
+    },
+    ws,
+    http
+  ),
   cache: new InMemoryCache()
 });
 
@@ -37,10 +59,20 @@ export default new Vuex.Store({
   },
 
   actions: {
-    async fetch({ commit }) {
-      return apollo.query({ query: GetToDos }).then(({ data }) => {
+    subscribe({ commit }) {
+      return apollo.subscribe({ query: WatchToDos }).subscribe(({ data }) => {
+        commit('reset', data.todos);
+      });
+      /*return apollo.query({ query: GetToDos }).then(({ data }) => {
         commit('reset', data.todos);
         return data.todos;
+      });*/
+    },
+    add({ commit }, label) {
+      const variables = { label };
+      return apollo.mutate({ mutation: AddItem, variables }).then(({ data }) => {
+        commit('add', data.item);
+        return data.item;
       });
     }
   }

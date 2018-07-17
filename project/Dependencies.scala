@@ -9,6 +9,7 @@ object Dependencies {
     "com.typesafe.akka"   %% "akka-stream"          % "2.5.12",
 
     "org.sangria-graphql" %% "sangria"              % "1.4.1",
+    "org.sangria-graphql" %% "sangria-akka-streams" % "1.0.1",
 
     "org.scalatest" %% "scalatest" % "3.0.5" % Test
   )

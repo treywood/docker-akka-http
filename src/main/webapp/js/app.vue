@@ -1,25 +1,40 @@
 <template>
     <div>
-        <input type="text" v-model.lazy="name" />
-        <h1>{{greeting}}</h1>
+        <ul>
+            <li v-for="todo in todos" v-key="todo.id">
+                {{todo.label}}
+            </li>
+        </ul>
+        <form @submit.prevent="add">
+            <input v-model="label" type="text" />
+            <button type="submit">Add</button>
+        </form>
     </div>
 </template>
 
 <script>
     import { Component, Watch } from 'vue-property-decorator';
-    import fetch from 'unfetch';
 
-    @Component()
+    import store from './store';
+
+    @Component({ store })
     export default class App extends Vue {
 
-        name = 'you';
-        greeting = 'Hi you';
+        label = '';
 
-        @Watch('name')
-        update() {
-          //
-          fetch(`/api/greet?name=${this.name}`).then(res => res.text())
-            .then(g => this.greeting = g);
+        mounted() {
+          this.$store.dispatch('subscribe');
+        }
+
+        get todos() {
+          return this.$store.state.todos;
+        }
+
+        add() {
+          this.$store.dispatch('add', this.label)
+            .then(() => {
+                this.label = '';
+            })
         }
 
     }
