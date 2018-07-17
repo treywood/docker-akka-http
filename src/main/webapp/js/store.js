@@ -71,7 +71,7 @@ export default new Vuex.Store({
     add({ commit }, label) {
       const variables = { label };
       return apollo.mutate({ mutation: AddItem, variables }).then(({ data }) => {
-        commit('add', data.item);
+        //commit('add', data.item);
         return data.item;
       });
     }

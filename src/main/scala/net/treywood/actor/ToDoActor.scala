@@ -2,11 +2,12 @@ package net.treywood.actor
 
 import akka.actor.{Actor, Props}
 import net.treywood.actor.ToDoActor.{DeleteItem, FetchItem, NewItem, ToggleDone}
+import net.treywood.http.apis.GraphQLApi
 import net.treywood.http.apis.ToDoApi.ToDoItem
 
 import scala.util.Random
 
-object ToDoActor extends GraphQLSubscription[Seq[ToDoItem]] {
+object ToDoActor {
 
   case class NewItem(label: String)
   case class ToggleDone(id: String, done: Boolean)
@@ -18,13 +19,13 @@ object ToDoActor extends GraphQLSubscription[Seq[ToDoItem]] {
     val newItem = ToDoItem(newId, label)
 
     items += (newId -> newItem)
-    broadcast(getAll)
+    GraphQLApi.refreshQuery("WatchToDos")
     newItem
   }
 
   def deleteItem(id: String) = {
     items -= id
-    broadcast(getAll)
+    GraphQLApi.refreshQuery("WatchToDos")
   }
 
   def toggleDone(id: String, done: Boolean) = {
@@ -33,7 +34,7 @@ object ToDoActor extends GraphQLSubscription[Seq[ToDoItem]] {
       items = items.updated(id, updated)
       updated
     })
-    broadcast(getAll)
+    GraphQLApi.refreshQuery("WatchToDos")
     item
   }
 

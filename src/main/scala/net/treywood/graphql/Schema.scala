@@ -1,8 +1,10 @@
 package net.treywood.graphql
 
+import akka.NotUsed
 import akka.stream.scaladsl.Source
 import net.treywood.actor.ToDoActor
-import net.treywood.http.apis.ToDoApi.ToDoItemType
+import net.treywood.http.apis.ToDoApi
+import net.treywood.http.apis.ToDoApi.{ToDoItem, ToDoItemType}
 import sangria.schema.{Action, Argument, BooleanType, Field, ListType, ObjectType, OptionType, OutputType, StringType, Value, fields}
 import sangria.streaming.akkaStreams._
 
@@ -56,7 +58,7 @@ object Schema {
     "Subscription",
     () => fields[Context, Unit](
       Field.subs("todos", ListType(ToDoItemType),
-        resolve = _ => Source.single(Value(ToDoActor.getAll)) ++ ToDoActor.newSubscription[Context]
+        resolve = _ =>  Source.
       )
     )
   )
