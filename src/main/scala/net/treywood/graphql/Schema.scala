@@ -8,7 +8,6 @@ import sangria.streaming.akkaStreams._
 
 object Schema {
 
-  import net.treywood.http.Main.system.dispatcher
   import net.treywood.http.Main.materializer
 
   lazy val Query = ObjectType(
@@ -56,7 +55,7 @@ object Schema {
     "Subscription",
     () => fields[Context, Unit](
       Field.subs("todos", ListType(ToDoItemType),
-        resolve = _ => Source.single(Value(ToDoActor.getAll)) ++ ToDoActor.newSubscription[Context]
+        resolve = _ => Source.single(Value(ToDoActor.getAll)) ++ ToDoActor.source
       )
     )
   )

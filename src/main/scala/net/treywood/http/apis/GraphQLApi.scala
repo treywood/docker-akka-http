@@ -1,14 +1,16 @@
 package net.treywood.http.apis
 
 import akka.actor.{Actor, ActorRef, Props}
+import akka.http.scaladsl.model.ws.TextMessage.Streamed
 import akka.http.scaladsl.model.ws._
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusCodes}
 import akka.http.scaladsl.server.Directives._
 import akka.pattern.ask
+import akka.stream.scaladsl
 import akka.stream.scaladsl.{Flow, Sink, Source}
 import net.treywood.graphql.{Context, Schema}
 import net.treywood.http.JsonSupport
-import sangria.execution.{ExceptionHandler, Executor, HandledException}
+import sangria.execution.Executor
 import sangria.parser.QueryParser
 import spray.json.{JsArray, JsBoolean, JsNull, JsNumber, JsObject, JsString, JsValue, JsonFormat, _}
 
@@ -18,6 +20,7 @@ import scala.util.{Failure, Success}
 
 object GraphQLApi extends Api("graphql") with JsonSupport {
   import GraphQLActor._
+  import net.treywood.http.Main.materializer
   import net.treywood.http.Main.system.dispatcher
 
   implicit val variablesSupport = new JsonFormat[Any] {
@@ -53,11 +56,9 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
     (post & entity(as[JsValue])) {
       json =>
         val result = (graphqlActor ? JsonQuery(json.asJsObject)).map({
-          case Response(res) =>
-            HttpResponse(entity = HttpEntity(ContentTypes.`application/json`, res))
-          case x =>
-            println(s"THIS: $x")
-            HttpResponse(StatusCodes.BadRequest, entity = HttpEntity(ContentTypes.`text/plain(UTF-8)`, x.toString))
+          res =>
+            val json = res.toJson.compactPrint
+            HttpResponse(entity = HttpEntity(ContentTypes.`application/json`, json))
         })
         complete(result)
     }
@@ -68,7 +69,6 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
   object GraphQLActor {
     case class StringQuery(str: String)
     case class JsonQuery(json: JsObject)
-    case class Response(str: String)
 
     case class NewSubscription(payload: JsObject)
   }
@@ -82,10 +82,10 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
     def receive = {
 
       case StringQuery(str) =>
-        sender ! executeQuery(str.parseJson.asJsObject).map(r => Response(r.toString))
+        sender ! Await.result(executeQuery(str.parseJson.asJsObject), timeout.duration)
 
       case JsonQuery(json) =>
-        sender ! executeQuery(json).map(r => Response(r.toString))
+        sender ! Await.result(executeQuery(json), timeout.duration)
 
       case NewSubscription(payload) =>
         payload.fields.get("operationName").foreach({
@@ -128,9 +128,15 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
           println("gonna execute")
 
           Executor.execute(
-            Schema.Schema, query, Context(),
+            Schema.Schema,
+            queryAst = query,
+            userContext = Context(),
             variables = variables
-          )
+          ).recoverWith({
+            case e: Throwable =>
+              println(e.getMessage)
+              Future.successful("Broke")
+          })
 
         case Failure(e: Throwable) =>
           println(e.getMessage)
@@ -139,19 +145,35 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
     }
   }
 
-  val graphQLSubscription =
-      Flow[Message]
-        .collect({
-          case TextMessage.Strict(txt) =>
-            println(txt)
-            val json = txt.parseJson.asJsObject
-            val msg = for {
-              JsString(typ) <- json.fields.get("type") if typ == "start"
-              payload <- json.fields.get("payload")
-            } yield NewSubscription(payload.asJsObject)
-          msg.getOrElse(())
-        })
-        .ask[String](parallelism = 5)(graphqlActor)
-        .map(str => TextMessage(Source.single(str)))
+  val graphQLSubscription = Flow[Message].mapConcat({
+    case TextMessage.Strict(txt) =>
+      val jsonFields = txt.parseJson.asJsObject.fields
+      println(jsonFields)
+      jsonFields
+        .get("type").collect({
+          case JsString("connection_init") => TextMessage("""{"type":"connection_ack"}""")
+          case JsString("start") => Streamed(Source.fromFuture {
+            println("start!")
+            (for {
+              id <- jsonFields.get("id")
+              payload <- jsonFields.get("payload").map(_.asJsObject)
+            } yield {
+              (graphqlActor ? GraphQLActor.JsonQuery(payload))
+                .map({ result =>
+                  JsObject(Map(
+                    "type" -> JsString("data"),
+                    "id" -> id,
+                    "payload" -> result.toJson.asJsObject
+                  )).compactPrint
+                })
+            })
+            .getOrElse(Future.successful("""{"type":"complete"}"""))
+          })
+        }).toList
+    case bm: BinaryMessage =>
+      bm.dataStream.runWith(Sink.ignore)
+      bm :: Nil
+    case _ => Nil
+  })
 
 }
