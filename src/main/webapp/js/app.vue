@@ -1,8 +1,8 @@
 <template>
     <div>
         <ul>
-            <li v-for="todo in todos" v-key="todo.id">
-                {{todo.label}}
+            <li v-for="todo in todos" :key="todo.id">
+                <input @change="toggle(todo)" type="checkbox" :checked="todo.done" /> {{todo.label}}
             </li>
         </ul>
         <form @submit.prevent="add">
@@ -35,6 +35,10 @@
             .then(() => {
                 this.label = '';
             })
+        }
+
+        toggle(item) {
+          this.$store.dispatch('toggle', item)
         }
 
     }

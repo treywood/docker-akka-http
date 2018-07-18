@@ -98,7 +98,8 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
           val opSubs = subs.getOrElse(opName, Set.empty)
           subs += (opName -> (opSubs + subscription))
 
-          subscription.ref ! Await.result(executeQuery(json), timeout.duration)
+          val queryResult = Await.result(executeQuery(json), timeout.duration)
+          push(subscription, queryResult.toJson.asJsObject)
         }
 
       case RefreshQuery(opName) => for {
@@ -106,14 +107,20 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
         sub <- subscriptions
       } {
         val queryResult = Await.result(executeQuery(sub.query, sub.variables), timeout.duration)
-        val queryWithId = {
-          val json = queryResult.toString.parseJson.asJsObject
-          JsObject(json.fields + ("id" -> JsString(sub.id)))
-        }
-        sub.ref ! queryWithId.compactPrint
+        push(sub, queryResult.toJson.asJsObject)
       }
 
       case _ => sender ! """{"status":"dunno"}"""
+    }
+
+    private def push(sub: GraphQLSubscription, result: JsObject) = {
+      val payload =
+        JsObject(Map(
+          "type" -> JsString("data"),
+          "id" -> JsString(sub.id),
+          "payload" -> result
+        ))
+      sub.ref ! payload.compactPrint
     }
 
     private def executeQuery(json: JsObject): Future[Any] = {

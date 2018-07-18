@@ -54,11 +54,14 @@ object Schema {
     )
   )
 
+  private type SubValue[T] = Action[Context,T]
+
   lazy val Subscription = ObjectType(
     "Subscription",
     () => fields[Context, Unit](
       Field.subs("todos", ListType(ToDoItemType),
-        resolve = _ =>  Source.
+        // this just has to be here or sangria rejects the subscription query
+        resolve = _ => Source.single[SubValue[Seq[ToDoItem]]](Value(ToDoActor.getAll))
       )
     )
   )
