@@ -1,15 +1,15 @@
 package net.treywood.http.apis
 
-import akka.actor.{Actor, ActorRef, Props}
-import akka.http.scaladsl.model.ws.TextMessage.Streamed
+import akka.NotUsed
+import akka.actor.{Actor, ActorRef, PoisonPill, Props}
 import akka.http.scaladsl.model.ws._
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusCodes}
 import akka.http.scaladsl.server.Directives._
 import akka.pattern.ask
-import akka.stream.scaladsl
+import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.{Flow, Sink, Source}
 import net.treywood.graphql.{Context, Schema}
-import net.treywood.http.JsonSupport
+import net.treywood.http.{JsonSupport, Main}
 import sangria.execution.Executor
 import sangria.parser.QueryParser
 import spray.json.{JsArray, JsBoolean, JsNull, JsNumber, JsObject, JsString, JsValue, JsonFormat, _}
@@ -20,7 +20,6 @@ import scala.util.{Failure, Success}
 
 object GraphQLApi extends Api("graphql") with JsonSupport {
   import GraphQLActor._
-  import net.treywood.http.Main.materializer
   import net.treywood.http.Main.system.dispatcher
 
   implicit val variablesSupport = new JsonFormat[Any] {
@@ -48,7 +47,7 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
   serve {
     get { ctx =>
       val result = ctx.request.header[UpgradeToWebSocket] match {
-        case Some(upgrade) => upgrade.handleMessages(graphQLSubscription, subprotocol = Some("graphql-ws"))
+        case Some(upgrade) => upgrade.handleMessages(newSubscription, subprotocol = Some("graphql-ws"))
         case None => HttpResponse(StatusCodes.NotFound)
       }
       ctx.complete(result)
@@ -65,19 +64,23 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
   }
 
   lazy val graphqlActor = net.treywood.http.Main.system.actorOf(Props[GraphQLActor])
+  def refreshQuery(opName: String) = {
+    graphqlActor ! RefreshQuery(opName)
+  }
 
   object GraphQLActor {
     case class StringQuery(str: String)
     case class JsonQuery(json: JsObject)
+    case class Result(str: String)
 
-    case class NewSubscription(payload: JsObject)
+    case class NewSubscription(id: String, payload: JsObject)
+    case class RefreshQuery(opName: String)
   }
 
   class GraphQLActor extends Actor with JsonSupport {
     import GraphQLActor._
 
-    var subs: Map[String, Set[ActorRef]] = Map.empty
-    var operations: Map[String, JsObject] = Map.empty
+    var subs: Map[String, Set[GraphQLSubscription]] = Map.empty
 
     def receive = {
 
@@ -87,22 +90,37 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
       case JsonQuery(json) =>
         sender ! Await.result(executeQuery(json), timeout.duration)
 
-      case NewSubscription(payload) =>
-        payload.fields.get("operationName").foreach({
-          case JsString(opName) =>
-            println(opName)
+      case NewSubscription(id, json) =>
+        for {
+          JsString(opName) <- json.fields.get("operationName")
+          subscription <- GraphQLSubscription.fromJson(id, sender, json)
+        } yield {
+          val opSubs = subs.getOrElse(opName, Set.empty)
+          subs += (opName -> (opSubs + subscription))
 
-            val opSubs = subs.getOrElse(opName, Set.empty)
-            subs = subs.updated(opName, opSubs + sender)
-            operations = operations.updated(opName, payload)
-            context.watch(sender)
+          val queryResult = Await.result(executeQuery(json), timeout.duration)
+          push(subscription, queryResult.toJson.asJsObject)
+        }
 
-            val result = Await.result(executeQuery(payload), timeout.duration)
-            sender ! result.toJson.compactPrint
-          case x => sender ! x.toString
-        })
+      case RefreshQuery(opName) => for {
+        subscriptions <- subs.get(opName)
+        sub <- subscriptions
+      } {
+        val queryResult = Await.result(executeQuery(sub.query, sub.variables), timeout.duration)
+        push(sub, queryResult.toJson.asJsObject)
+      }
 
       case _ => sender ! """{"status":"dunno"}"""
+    }
+
+    private def push(sub: GraphQLSubscription, result: JsObject) = {
+      val payload =
+        JsObject(Map(
+          "type" -> JsString("data"),
+          "id" -> JsString(sub.id),
+          "payload" -> result
+        ))
+      sub.ref ! payload.compactPrint
     }
 
     private def executeQuery(json: JsObject): Future[Any] = {
@@ -128,15 +146,9 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
           println("gonna execute")
 
           Executor.execute(
-            Schema.Schema,
-            queryAst = query,
-            userContext = Context(),
+            Schema.Schema, query, Context(),
             variables = variables
-          ).recoverWith({
-            case e: Throwable =>
-              println(e.getMessage)
-              Future.successful("Broke")
-          })
+          )
 
         case Failure(e: Throwable) =>
           println(e.getMessage)
@@ -145,35 +157,67 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
     }
   }
 
-  val graphQLSubscription = Flow[Message].mapConcat({
-    case TextMessage.Strict(txt) =>
-      val jsonFields = txt.parseJson.asJsObject.fields
-      println(jsonFields)
-      jsonFields
-        .get("type").collect({
-          case JsString("connection_init") => TextMessage("""{"type":"connection_ack"}""")
-          case JsString("start") => Streamed(Source.fromFuture {
-            println("start!")
-            (for {
-              id <- jsonFields.get("id")
-              payload <- jsonFields.get("payload").map(_.asJsObject)
-            } yield {
-              (graphqlActor ? GraphQLActor.JsonQuery(payload))
-                .map({ result =>
-                  JsObject(Map(
-                    "type" -> JsString("data"),
-                    "id" -> id,
-                    "payload" -> result.toJson.asJsObject
-                  )).compactPrint
-                })
+  object WsActor {
+    case class NewSubscription(ref: ActorRef)
+  }
+
+  class WsActor extends Actor with JsonSupport {
+    import WsActor._
+
+    def waiting: Receive = {
+      case NewSubscription(ref) =>
+        println("connected")
+        context become connected(ref)
+    }
+
+    def connected(ref: ActorRef): Receive = {
+
+      // from WebSocket
+      case TextMessage.Strict(txt) =>
+        println(s"received message: $txt")
+        val fields = txt.parseJson.asJsObject.fields
+        (fields.get("type"), fields.get("id")) match {
+          case (Some(JsString("connection_init")), _) => ref ! """{"type":"connection_ack"}"""
+          case (_, Some(JsString(id))) =>
+            fields.get("payload").foreach(payload => {
+              graphqlActor ! GraphQLActor.NewSubscription(id, payload.asJsObject)
             })
-            .getOrElse(Future.successful("""{"type":"complete"}"""))
-          })
-        }).toList
-    case bm: BinaryMessage =>
-      bm.dataStream.runWith(Sink.ignore)
-      bm :: Nil
-    case _ => Nil
-  })
+          case _ => ref ! """{"type":"dunno"}"""
+        }
+
+      // response from GraphQLActor
+      case str: String => ref ! str
+
+    }
+
+    def receive = waiting
+
+  }
+
+  def newSubscription = {
+    val actor = Main.system.actorOf(Props[WsActor])
+
+    val incoming =
+      Sink.actorRef(actor, PoisonPill)
+
+    val outgoing: Source[TextMessage.Strict, NotUsed] =
+      Source.actorRef[String](10, OverflowStrategy.fail)
+        .mapMaterializedValue({ ref =>
+          actor ! WsActor.NewSubscription(ref)
+          NotUsed
+        })
+        .map(str => TextMessage.Strict(str))
+
+    Flow.fromSinkAndSource(incoming, outgoing)
+  }
+
+  case class GraphQLSubscription(id: String, query: String, variables: JsObject, ref: ActorRef)
+
+  object GraphQLSubscription {
+    def fromJson(id: String, ref: ActorRef, json: JsObject) = for {
+      JsString(query) <- json.fields.get("query")
+      variables <- json.fields.get("variables").map(_.asJsObject)
+    } yield GraphQLSubscription(id, query, variables, ref)
+  }
 
 }

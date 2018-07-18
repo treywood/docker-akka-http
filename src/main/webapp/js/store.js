@@ -46,15 +46,6 @@ export default new Vuex.Store({
   mutations: {
     reset: (state, items) => {
       state.todos = items;
-    },
-    add: (state, item) => {
-      state.todos = [...state.todos, item];
-    },
-    remove: (state, id) => {
-      state.todos = state.todos.filter(i => i.id !== id)
-    },
-    update: (state, item) => {
-      state.todos = state.todos.map(i => i.id === item.id ? item : i);
     }
   },
 
@@ -63,15 +54,16 @@ export default new Vuex.Store({
       return apollo.subscribe({ query: WatchToDos }).subscribe(({ data }) => {
         commit('reset', data.todos);
       });
-      /*return apollo.query({ query: GetToDos }).then(({ data }) => {
-        commit('reset', data.todos);
-        return data.todos;
-      });*/
     },
     add({ commit }, label) {
       const variables = { label };
       return apollo.mutate({ mutation: AddItem, variables }).then(({ data }) => {
-        commit('add', data.item);
+        return data.item;
+      });
+    },
+    toggle({ commit }, item) {
+      const variables = { id: item.id, done: !item.done };
+      return apollo.mutate({ mutation: UpdateItem, variables }).then(({ data }) => {
         return data.item;
       });
     }
