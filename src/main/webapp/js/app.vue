@@ -1,20 +1,30 @@
 <template>
     <div>
-        <ul>
-            <li v-for="todo in todos" :key="todo.id">
-                <input @change="toggle(todo)" type="checkbox" :checked="todo.done" /> {{todo.label}}
-            </li>
-        </ul>
-        <form @submit.prevent="add">
-            <input v-model="label" type="text" />
-            <button type="submit">Add</button>
+        <form novalidate class="md-layout" @submit.prevent="add">
+            <md-card class="md-layout-item md-size-50 md-small-size-50">
+                <md-card-header>
+                    <div class="md-title">To Dos</div>
+                </md-card-header>
+                <md-card-content>
+                    <md-list>
+                        <md-list-item v-for="todo in todos" :key="todo.id">
+                            <md-checkbox v-model="todo.done" @change="update(todo)">{{todo.label}}</md-checkbox>
+                        </md-list-item>
+                    </md-list>
+                    <md-field>
+                        <md-input v-model="label" />
+                    </md-field>
+                </md-card-content>
+                <md-card-actions>
+                    <md-button type="submit" class="md-primary">Add</md-button>
+                </md-card-actions>
+            </md-card>
         </form>
     </div>
 </template>
 
 <script>
-    import { Component, Watch } from 'vue-property-decorator';
-
+    import { Component } from 'vue-property-decorator';
     import store from './store';
 
     @Component({ store })
@@ -37,8 +47,8 @@
             })
         }
 
-        toggle(item) {
-          this.$store.dispatch('toggle', item)
+        update(item) {
+          this.$store.dispatch('update', item);
         }
 
     }

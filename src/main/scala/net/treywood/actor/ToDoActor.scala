@@ -34,7 +34,7 @@ object ToDoActor {
       items = items.updated(id, updated)
       updated
     })
-    GraphQLApi.notify("WatchToDos")
+    GraphQLApi.notify("todos")
     item
   }
 

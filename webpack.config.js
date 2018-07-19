@@ -49,6 +49,9 @@ module.exports = {
             test: /\.vue$/,
             exclude: /node_modules/,
             use: ['vue-loader']
+        },{
+            test: /\.css$/i,
+            use: ['style-loader','css-loader']
         }]
     },
 

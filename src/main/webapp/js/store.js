@@ -61,11 +61,14 @@ export default new Vuex.Store({
         return data.item;
       });
     },
-    toggle({ commit }, item) {
-      const variables = { id: item.id, done: !item.done };
+    update({ dispatch }, item) {
+      const variables = { id: item.id, done: item.done };
       return apollo.mutate({ mutation: UpdateItem, variables }).then(({ data }) => {
         return data.item;
       });
+    },
+    toggle({ dispatch }, item) {
+      return dispatch('update', { ...item, done: !item.done });
     }
   }
 

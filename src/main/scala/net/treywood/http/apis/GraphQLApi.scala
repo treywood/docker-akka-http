@@ -181,9 +181,13 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
       // from WebSocket
       case TextMessage.Strict(txt) =>
         println(s"received message: $txt")
+
         val fields = txt.parseJson.asJsObject.fields
         (fields.get("type"), fields.get("id")) match {
+          // connection acknowledgement
           case (Some(JsString("connection_init")), _) => ref ! """{"type":"connection_ack"}"""
+
+          // begin a subscription
           case (Some(JsString("start")), Some(JsString(id))) =>
             fields.get("payload").foreach(payload => {
               val payloadFields = payload.asJsObject.fields
@@ -193,6 +197,8 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
                   QueryParser.parse(queryStr) match {
                     case Success(query) =>
 
+                      // find all of the fields and map to queries to associate
+                      // with this websocket
                       val subs = query.operations.collect({
                         case (_, op) if op.operationType == OperationType.Subscription =>
                           op.selections.collect({
@@ -203,6 +209,7 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
                           })
                       }).flatten.toMap
 
+                      // subscribe the queries to the graphql actor
                       graphqlActor ! GraphQLActor.NewSubscription(subs)
 
                     case Failure(e) =>
@@ -212,6 +219,7 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
                   ref ! """{"type":"error","message":"Invalid Query"}"""
               })
             })
+
           case _ => ref ! """{"type":"dunno"}"""
         }
 
