@@ -46,13 +46,23 @@ export default new Vuex.Store({
   mutations: {
     reset: (state, items) => {
       state.todos = items;
+    },
+    add: (state, item) => {
+      state.todos = [...state.todos, item];
     }
   },
 
   actions: {
-    subscribe({ commit }) {
-      return apollo.subscribe({ query: WatchToDos }).subscribe(({ data }) => {
+    fetch({ commit, dispatch }) {
+      return apollo.query({ query: GetToDos }).then(({ data }) => {
         commit('reset', data.todos);
+        return dispatch('watch');
+      });
+    },
+    watch({ commit }) {
+      return apollo.subscribe({ query: WatchToDos }).subscribe(({ data }) => {
+        if (data.new) return commit('add', data.new);
+        if (data.updated) return commit('update', data.updated);
       });
     },
     add({ commit }, label) {

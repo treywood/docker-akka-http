@@ -10,7 +10,7 @@ import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.{Flow, Sink, Source}
 import net.treywood.graphql.{Context, Schema}
 import net.treywood.http.{JsonSupport, Main}
-import sangria.ast.{Document, Field, OperationType}
+import sangria.ast.{Document, Field, OperationDefinition, OperationType}
 import sangria.execution.Executor
 import sangria.parser.QueryParser
 import spray.json.{JsArray, JsBoolean, JsNull, JsNumber, JsObject, JsString, JsValue, JsonFormat, _}
@@ -28,6 +28,10 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
     override def write(obj: Any): JsValue = obj match {
       case str: String => JsString(str)
       case n: BigDecimal => JsNumber(n)
+      case n: Integer => JsNumber(n)
+      case n: BigInt => JsNumber(n)
+      case n: Double => JsNumber(n)
+      case n: Float => JsNumber(n)
       case b: Boolean => JsBoolean(b)
       case m: Map[_,_] => JsObject(m.map({ case (k, v) => k.toString -> write(v) }))
       case a: Iterable[_] => JsArray(a.map(write).toVector)
@@ -104,9 +108,6 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
 
             val newSub = GraphQLSubscription(sender, sub)
             subs += (field -> (fieldSubs + newSub))
-
-            val queryResult = Await.result(executeQuery(sub), timeout.duration)
-            push(newSub, queryResult.toJson.asJsObject)
         })
 
       case Notify(field) => for {
@@ -203,9 +204,14 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
                         case (_, op) if op.operationType == OperationType.Subscription =>
                           op.selections.collect({
                             case f: Field =>
-                              val defs = op :: query.fragments.values.toList
+                              // new operation with only this field
+                              val subOp = op.copy(selections = Vector(f))
+
+                              // include fragments just in case
+                              val defs = Vector(subOp :: query.fragments.values.toList :_*)
+
                               val variables = payloadFields.getOrElse("variables", JsObject.empty).asJsObject
-                              f.name -> Query(id, Document(defs.toVector), variables)
+                              f.name -> Query(id, Document(defs), variables)
                           })
                       }).flatten.toMap
 

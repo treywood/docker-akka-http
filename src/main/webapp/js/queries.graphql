@@ -9,7 +9,7 @@ query GetToDos {
 }
 
 subscription WatchToDos {
-    todos {
+    new: newItem {
         ...ToDoFields
     }
 }

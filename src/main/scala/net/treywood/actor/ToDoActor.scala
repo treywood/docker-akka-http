@@ -1,10 +1,13 @@
 package net.treywood.actor
 
+import akka.NotUsed
 import akka.actor.{Actor, Props}
+import akka.stream.scaladsl.Source
 import net.treywood.actor.ToDoActor.{DeleteItem, FetchItem, NewItem, ToggleDone}
 import net.treywood.http.apis.GraphQLApi
 import net.treywood.http.apis.ToDoApi.ToDoItem
 
+import scala.collection.mutable
 import scala.util.Random
 
 object ToDoActor {
@@ -17,6 +20,9 @@ object ToDoActor {
   def addItem(label: String) = {
     val newId = Random.alphanumeric.take(10).mkString
     val newItem = ToDoItem(newId, label)
+
+    newQueue.enqueue(newItem)
+    GraphQLApi.notify("newItem")
 
     items += (newId -> newItem)
     GraphQLApi.notify("todos")
@@ -44,7 +50,17 @@ object ToDoActor {
 
   def getAll = items.values.toSeq
 
+  private val newQueue = mutable.Queue.empty[ToDoItem]
   private var items = Map.empty[String, ToDoItem]
+
+  class DequeueIterator[A](queue: mutable.Queue[A]) extends Iterator[Option[A]] {
+    def hasNext = queue.nonEmpty
+    def next = Option(queue.dequeue())
+  }
+
+  def newItems =
+    if (newQueue.isEmpty) Source.single(None)
+    else Source.fromIterator(() => new DequeueIterator(newQueue)).mapMaterializedValue(_ => NotUsed)
 
   lazy val props = Props[ToDoActor]
 }

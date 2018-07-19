@@ -1,7 +1,7 @@
 <template>
     <div>
         <form novalidate class="md-layout" @submit.prevent="add">
-            <md-card class="md-layout-item md-size-50 md-small-size-50">
+            <md-card class="md-layout-item">
                 <md-card-header>
                     <div class="md-title">To Dos</div>
                 </md-card-header>
@@ -12,6 +12,7 @@
                         </md-list-item>
                     </md-list>
                     <md-field>
+                        <label>New Item</label>
                         <md-input v-model="label" />
                     </md-field>
                 </md-card-content>
@@ -33,7 +34,7 @@
         label = '';
 
         mounted() {
-          this.$store.dispatch('subscribe');
+          this.$store.dispatch('fetch');
         }
 
         get todos() {
