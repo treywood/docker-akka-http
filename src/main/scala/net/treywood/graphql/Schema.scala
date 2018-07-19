@@ -66,6 +66,9 @@ object Schema {
       ),
       Field.subs("newItem", OptionType(ToDoItemType),
         resolve = _ => ToDoActor.newItems.map(action[Option[ToDoItem]])
+      ),
+      Field.subs("updatedItem", OptionType(ToDoItemType),
+        resolve = _ => ToDoActor.updatedItems.map(action[Option[ToDoItem]])
       )
     )
   )

@@ -205,10 +205,10 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
                           op.selections.collect({
                             case f: Field =>
                               // new operation with only this field
-                              val subOp = op.copy(selections = Vector(f))
+                              // val subOp = op.copy(selections = Vector(f))
 
                               // include fragments just in case
-                              val defs = Vector(subOp :: query.fragments.values.toList :_*)
+                              val defs = Vector(op :: query.fragments.values.toList :_*)
 
                               val variables = payloadFields.getOrElse("variables", JsObject.empty).asJsObject
                               f.name -> Query(id, Document(defs), variables)

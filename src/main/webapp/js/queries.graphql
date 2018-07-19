@@ -8,8 +8,13 @@ query GetToDos {
     }
 }
 
-subscription WatchToDos {
+subscription NewToDos {
     new: newItem {
+        ...ToDoFields
+    }
+}
+subscription UpdatedToDos {
+    updated: updatedItem {
         ...ToDoFields
     }
 }

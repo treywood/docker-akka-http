@@ -3,7 +3,8 @@ import Vuex from 'vuex';
 import ApolloClient from 'apollo-client';
 import { createHttpLink } from 'apollo-link-http';
 import { InMemoryCache } from 'apollo-cache-inmemory';
-import { GetToDos, AddItem, DeleteItem, UpdateItem, WatchToDos } from './queries.graphql';
+import { GetToDos, AddItem, DeleteItem, UpdateItem, UpdatedToDos, NewToDos } from './queries.graphql';
+import { merge } from 'rxjs/observable/merge';
 import fetch from 'unfetch';
 import { WebSocketLink } from 'apollo-link-ws';
 import { SubscriptionClient } from 'subscriptions-transport-ws';
@@ -49,6 +50,9 @@ export default new Vuex.Store({
     },
     add: (state, item) => {
       state.todos = [...state.todos, item];
+    },
+    update: (state, item) => {
+      state.todos = state.todos.map(i => i.id === item.id ? item : i);
     }
   },
 
@@ -60,7 +64,10 @@ export default new Vuex.Store({
       });
     },
     watch({ commit }) {
-      return apollo.subscribe({ query: WatchToDos }).subscribe(({ data }) => {
+      return merge(
+        apollo.subscribe({ query: NewToDos }),
+        apollo.subscribe({ query: UpdatedToDos })
+      ).subscribe(({ data }) => {
         if (data.new) return commit('add', data.new);
         if (data.updated) return commit('update', data.updated);
       });

@@ -38,9 +38,10 @@ object ToDoActor {
     val item = items.get(id).map({ item =>
       val updated = item.copy(done = done)
       items = items.updated(id, updated)
+      udpateQueue.enqueue(updated)
+      GraphQLApi.notify("updatedItem")
       updated
     })
-    GraphQLApi.notify("todos")
     item
   }
 
@@ -51,6 +52,7 @@ object ToDoActor {
   def getAll = items.values.toSeq
 
   private val newQueue = mutable.Queue.empty[ToDoItem]
+  private val udpateQueue = mutable.Queue.empty[ToDoItem]
   private var items = Map.empty[String, ToDoItem]
 
   class DequeueIterator[A](queue: mutable.Queue[A]) extends Iterator[Option[A]] {
@@ -61,6 +63,10 @@ object ToDoActor {
   def newItems =
     if (newQueue.isEmpty) Source.single(None)
     else Source.fromIterator(() => new DequeueIterator(newQueue)).mapMaterializedValue(_ => NotUsed)
+
+  def updatedItems =
+    if (udpateQueue.isEmpty) Source.single(None)
+    else Source.fromIterator(() => new DequeueIterator(udpateQueue)).mapMaterializedValue(_ => NotUsed)
 
   lazy val props = Props[ToDoActor]
 }
