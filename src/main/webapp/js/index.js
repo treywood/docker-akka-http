@@ -9,3 +9,15 @@ Vue.use(VueMaterial);
 new App({
     el: '#app'
 });
+
+window.SOCKETS = [];
+
+function disconnect() {
+  console.log('disconnect');
+  for (const s of window.SOCKETS) {
+    s.unsubscribe();
+  }
+  return 'sure?';
+}
+
+window.addEventListener('beforeunload', disconnect);

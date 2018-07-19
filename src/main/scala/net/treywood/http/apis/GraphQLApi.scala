@@ -1,7 +1,7 @@
 package net.treywood.http.apis
 
 import akka.NotUsed
-import akka.actor.{Actor, ActorRef, PoisonPill, Props}
+import akka.actor.{Actor, ActorRef, PoisonPill, Props, Terminated}
 import akka.http.scaladsl.model.ws._
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusCodes}
 import akka.http.scaladsl.server.Directives._
@@ -58,6 +58,7 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
     def waiting: Receive = {
       case NewSubscription(ref) =>
         println("connected")
+        context watch ref
         context become connected(ref)
     }
 
@@ -112,6 +113,9 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
 
           case _ => ref ! """{"type":"dunno"}"""
         }
+
+      case Terminated(subject) =>
+        println("TERMINATED")
 
       // response from GraphQLActor
       case str: String => ref ! str

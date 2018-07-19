@@ -60,9 +60,11 @@ object ToDoActor {
     def next = Option(queue.dequeue())
   }
 
-  def newItems =
+  def newItems = {
+    println(s"new queue: ${newQueue.size}")
     if (newQueue.isEmpty) Source.single(None)
     else Source.fromIterator(() => new DequeueIterator(newQueue)).mapMaterializedValue(_ => NotUsed)
+  }
 
   def updatedItems =
     if (udpateQueue.isEmpty) Source.single(None)

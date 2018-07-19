@@ -45,14 +45,15 @@ class GraphQLActor extends Actor with JsonSupport {
           val newSub = GraphQLSubscription(sender, sub)
           subs += (field -> (fieldSubs + newSub))
       })
-      println(s"${subs.size} SUBSCRIPTIONS")
+      println(s"${subs.values.map(_.size).sum} SUBSCRIPTIONS")
 
     case Notify(field) => for {
       subscriptions <- subs.get(field)
-      sub <- subscriptions
+      (query, subsByQuery) <- subscriptions.groupBy(s => s.query)
     } {
-      val queryResult = Await.result(executeQuery(sub.query), timeout.duration)
-      push(sub, queryResult.toJson.asJsObject)
+      println(s"${subsByQuery.size} of ${subscriptions.size} subs will receive")
+      val queryResult = Await.result(executeQuery(query), timeout.duration)
+      subsByQuery.foreach(s => push(s, queryResult.toJson.asJsObject))
     }
 
     case _ => sender ! """{"status":"dunno"}"""
@@ -101,8 +102,6 @@ class GraphQLActor extends Actor with JsonSupport {
   }
 }
 
-case class GraphQLSubscription(ref: ActorRef, query: Query) {
-  lazy val hash = s"${query.doc.hashCode}:${query.variables.hashCode}"
-}
+case class GraphQLSubscription(ref: ActorRef, query: Query)
 
 case class Query(id: String, doc: Document, variables: JsObject)

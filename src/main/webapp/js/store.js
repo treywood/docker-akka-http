@@ -64,13 +64,15 @@ export default new Vuex.Store({
       });
     },
     watch({ commit }) {
-      return merge(
+      const sub = merge(
         apollo.subscribe({ query: NewToDos }),
         apollo.subscribe({ query: UpdatedToDos })
       ).subscribe(({ data }) => {
         if (data.new) return commit('add', data.new);
         if (data.updated) return commit('update', data.updated);
       });
+      window.SOCKETS.push(sub);
+      return sub;
     },
     add({ commit }, label) {
       const variables = { label };
