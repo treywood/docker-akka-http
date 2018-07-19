@@ -10,11 +10,13 @@ import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.{Flow, Sink, Source}
 import net.treywood.graphql.{Context, Schema}
 import net.treywood.http.{JsonSupport, Main}
+import sangria.ast.{Document, Field, OperationType}
 import sangria.execution.Executor
 import sangria.parser.QueryParser
 import spray.json.{JsArray, JsBoolean, JsNull, JsNumber, JsObject, JsString, JsValue, JsonFormat, _}
 
 import scala.concurrent.{Await, Future}
+import scala.util.parsing.json
 import scala.util.{Failure, Success}
 
 
@@ -64,17 +66,22 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
   }
 
   lazy val graphqlActor = net.treywood.http.Main.system.actorOf(Props[GraphQLActor])
-  def refreshQuery(opName: String) = {
-    graphqlActor ! RefreshQuery(opName)
+
+  def notify(field: String) = {
+    graphqlActor ! Notify(field)
   }
 
+  case class Query(id: String, doc: Document, variables: JsObject)
+
   object GraphQLActor {
+    type SubMap = Map[String, Query]
+
     case class StringQuery(str: String)
     case class JsonQuery(json: JsObject)
     case class Result(str: String)
 
-    case class NewSubscription(id: String, payload: JsObject)
-    case class RefreshQuery(opName: String)
+    case class NewSubscription(subs: SubMap)
+    case class Notify(opName: String)
   }
 
   class GraphQLActor extends Actor with JsonSupport {
@@ -90,23 +97,23 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
       case JsonQuery(json) =>
         sender ! Await.result(executeQuery(json), timeout.duration)
 
-      case NewSubscription(id, json) =>
-        for {
-          JsString(opName) <- json.fields.get("operationName")
-          subscription <- GraphQLSubscription.fromJson(id, sender, json)
-        } yield {
-          val opSubs = subs.getOrElse(opName, Set.empty)
-          subs += (opName -> (opSubs + subscription))
+      case NewSubscription(subscriptions) =>
+        subscriptions.foreach({
+          case (field, sub) =>
+            val fieldSubs = subs.getOrElse(field, Set.empty)
 
-          val queryResult = Await.result(executeQuery(json), timeout.duration)
-          push(subscription, queryResult.toJson.asJsObject)
-        }
+            val newSub = GraphQLSubscription(sender, sub)
+            subs += (field -> (fieldSubs + newSub))
 
-      case RefreshQuery(opName) => for {
-        subscriptions <- subs.get(opName)
+            val queryResult = Await.result(executeQuery(sub), timeout.duration)
+            push(newSub, queryResult.toJson.asJsObject)
+        })
+
+      case Notify(field) => for {
+        subscriptions <- subs.get(field)
         sub <- subscriptions
       } {
-        val queryResult = Await.result(executeQuery(sub.query, sub.variables), timeout.duration)
+        val queryResult = Await.result(executeQuery(sub.query), timeout.duration)
         push(sub, queryResult.toJson.asJsObject)
       }
 
@@ -117,10 +124,19 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
       val payload =
         JsObject(Map(
           "type" -> JsString("data"),
-          "id" -> JsString(sub.id),
+          "id" -> JsString(sub.query.id),
           "payload" -> result
         ))
       sub.ref ! payload.compactPrint
+    }
+
+    private def executeQuery(query: Query): Future[Any] = {
+      val variableMap = query.variables.fields.mapValues(_.convertTo[Any])
+      val variables = sangria.marshalling.InputUnmarshaller.mapVars(variableMap)
+
+      println("gonna execute")
+
+      Executor.execute( Schema.Schema, query.doc, Context(), variables = variables)
     }
 
     private def executeQuery(json: JsObject): Future[Any] = {
@@ -139,17 +155,7 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
     private def executeQuery(queryStr: String, variablesJson: JsObject): Future[Any] = {
       QueryParser.parse(queryStr) match {
         case Success(query) =>
-
-          val variableMap = variablesJson.fields.mapValues(_.convertTo[Any])
-          val variables = sangria.marshalling.InputUnmarshaller.mapVars(variableMap)
-
-          println("gonna execute")
-
-          Executor.execute(
-            Schema.Schema, query, Context(),
-            variables = variables
-          )
-
+          executeQuery(Query("", query, variablesJson))
         case Failure(e: Throwable) =>
           println(e.getMessage)
           Future.successful(e.getMessage)
@@ -178,9 +184,33 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
         val fields = txt.parseJson.asJsObject.fields
         (fields.get("type"), fields.get("id")) match {
           case (Some(JsString("connection_init")), _) => ref ! """{"type":"connection_ack"}"""
-          case (_, Some(JsString(id))) =>
+          case (Some(JsString("start")), Some(JsString(id))) =>
             fields.get("payload").foreach(payload => {
-              graphqlActor ! GraphQLActor.NewSubscription(id, payload.asJsObject)
+              val payloadFields = payload.asJsObject.fields
+              payloadFields.get("query").foreach({
+                case JsString(queryStr) =>
+
+                  QueryParser.parse(queryStr) match {
+                    case Success(query) =>
+
+                      val subs = query.operations.collect({
+                        case (_, op) if op.operationType == OperationType.Subscription =>
+                          op.selections.collect({
+                            case f: Field =>
+                              val defs = op :: query.fragments.values.toList
+                              val variables = payloadFields.getOrElse("variables", JsObject.empty).asJsObject
+                              f.name -> Query(id, Document(defs.toVector), variables)
+                          })
+                      }).flatten.toMap
+
+                      graphqlActor ! GraphQLActor.NewSubscription(subs)
+
+                    case Failure(e) =>
+                      ref ! s"""{"type":"error","message":"${e.getMessage}"}"""
+                  }
+                case _ =>
+                  ref ! """{"type":"error","message":"Invalid Query"}"""
+              })
             })
           case _ => ref ! """{"type":"dunno"}"""
         }
@@ -211,13 +241,6 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
     Flow.fromSinkAndSource(incoming, outgoing)
   }
 
-  case class GraphQLSubscription(id: String, query: String, variables: JsObject, ref: ActorRef)
-
-  object GraphQLSubscription {
-    def fromJson(id: String, ref: ActorRef, json: JsObject) = for {
-      JsString(query) <- json.fields.get("query")
-      variables <- json.fields.get("variables").map(_.asJsObject)
-    } yield GraphQLSubscription(id, query, variables, ref)
-  }
+  case class GraphQLSubscription(ref: ActorRef, query: Query)
 
 }

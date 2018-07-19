@@ -19,13 +19,13 @@ object ToDoActor {
     val newItem = ToDoItem(newId, label)
 
     items += (newId -> newItem)
-    GraphQLApi.refreshQuery("WatchToDos")
+    GraphQLApi.notify("todos")
     newItem
   }
 
   def deleteItem(id: String) = {
     items -= id
-    GraphQLApi.refreshQuery("WatchToDos")
+    GraphQLApi.notify("todos")
   }
 
   def toggleDone(id: String, done: Boolean) = {
@@ -34,7 +34,7 @@ object ToDoActor {
       items = items.updated(id, updated)
       updated
     })
-    GraphQLApi.refreshQuery("WatchToDos")
+    GraphQLApi.notify("WatchToDos")
     item
   }
 
