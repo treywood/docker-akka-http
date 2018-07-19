@@ -8,7 +8,7 @@
                 <md-card-content>
                     <md-list>
                         <md-list-item v-for="todo in todos" :key="todo.id">
-                            <md-checkbox v-model="todo.done" @change="update(todo)">{{todo.label}}</md-checkbox>
+                            <md-checkbox :checked="todo.done" @change="update(todo)">{{todo.label}}</md-checkbox>
                         </md-list-item>
                     </md-list>
                     <md-field>
@@ -49,7 +49,7 @@
         }
 
         update(item) {
-          this.$store.dispatch('update', item);
+          this.$store.dispatch('toggle', item);
         }
 
     }
