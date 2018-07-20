@@ -1,19 +1,20 @@
 package net.treywood.http.apis
 
+import akka.actor.Props
 import akka.http.scaladsl.model.HttpResponse
 import akka.http.scaladsl.server.Directives._
 import akka.pattern.ask
 import net.treywood.actor.ToDoActor
 import net.treywood.graphql.Context
 import net.treywood.http.{JsonSupport, Main}
-import sangria.schema.{Field, ObjectType, fields, StringType, BooleanType}
+import sangria.schema.{BooleanType, Field, ObjectType, StringType, fields}
 import spray.json.{JsBoolean, JsString, JsValue}
 
 import scala.concurrent.Await
 
 object ToDoApi extends Api("api" / "todo") with JsonSupport {
 
-  lazy val actor = Main.system.actorOf(ToDoActor.props)
+  lazy val actor = Main.system.actorOf(Props[ToDoActor])
 
   serve {
     (post & entity(as[JsValue])) { json =>

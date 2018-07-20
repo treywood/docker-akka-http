@@ -9,18 +9,21 @@ import sangria.execution.Executor
 import sangria.parser.QueryParser
 import spray.json.{JsObject, JsString, _}
 
+import scala.collection.mutable
 import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success}
 
 object GraphQLActor {
-  type SubMap = Map[String, Query]
+  type SubMap = Map[String, Subscription]
 
   case class StringQuery(str: String)
   case class JsonQuery(json: JsObject)
   case class Result(str: String)
 
   case class NewSubscription(subs: SubMap)
-  case class Notify(opName: String)
+  case class StopSubscription(id: String)
+  case class Notify(field: String)
+  case class NotifyEnd(field: String)
 }
 
 class GraphQLActor extends Actor with JsonSupport {
@@ -47,13 +50,30 @@ class GraphQLActor extends Actor with JsonSupport {
       })
       println(s"${subs.values.map(_.size).sum} SUBSCRIPTIONS")
 
+    case StopSubscription(id) =>
+
+      val without = subs.map({
+        case (field, set) =>
+          val newSet = set.filterNot(s => s.subscription.id == id)
+          (field, newSet, newSet.size)
+      })
+
+      subs =
+        without.filter({ case (_, _, size) => size > 0 })
+          .map({ case (f, s, _) => f -> s }).toMap
+
+      println(s"STOPPED $id, NOW ${subs.values.map(_.size).sum} SUBSCRIPTIONS")
+
     case Notify(field) => for {
       subscriptions <- subs.get(field)
-      (query, subsByQuery) <- subscriptions.groupBy(s => s.query)
+      _ = println(s"${subscriptions.size} subscribed to $field")
+      (_, subsByQuery) <- subscriptions.groupBy(s => s.subscription.query.toString)
+      query <- subsByQuery.headOption.map(_.subscription.query)
     } {
       println(s"${subsByQuery.size} of ${subscriptions.size} subs will receive")
       val queryResult = Await.result(executeQuery(query), timeout.duration)
       subsByQuery.foreach(s => push(s, queryResult.toJson.asJsObject))
+      sender ! NotifyEnd
     }
 
     case _ => sender ! """{"status":"dunno"}"""
@@ -63,7 +83,7 @@ class GraphQLActor extends Actor with JsonSupport {
     val payload =
       JsObject(Map(
         "type" -> JsString("data"),
-        "id" -> JsString(sub.query.id),
+        "id" -> JsString(sub.subscription.id),
         "payload" -> result
       ))
     sub.ref ! payload.compactPrint
@@ -75,7 +95,7 @@ class GraphQLActor extends Actor with JsonSupport {
 
     println("gonna execute")
 
-    Executor.execute( Schema.Schema, query.doc, Context(), variables = variables)
+    Executor.execute( Schema.Schema, query.astQuery, new Context, variables = variables)
   }
 
   private def executeQuery(json: JsObject): Future[Any] = {
@@ -94,7 +114,7 @@ class GraphQLActor extends Actor with JsonSupport {
   private def executeQuery(queryStr: String, variablesJson: JsObject): Future[Any] = {
     QueryParser.parse(queryStr) match {
       case Success(query) =>
-        executeQuery(Query("", query, variablesJson))
+        executeQuery(Query(query, variablesJson))
       case Failure(e: Throwable) =>
         println(e.getMessage)
         Future.successful(e.getMessage)
@@ -102,6 +122,9 @@ class GraphQLActor extends Actor with JsonSupport {
   }
 }
 
-case class GraphQLSubscription(ref: ActorRef, query: Query)
+case class GraphQLSubscription(ref: ActorRef, subscription: Subscription)
 
-case class Query(id: String, doc: Document, variables: JsObject)
+case class Query(astQuery: Document, variables: JsObject) {
+  override def toString: String = astQuery.toString + ":" + variables.compactPrint
+}
+case class Subscription(id: String, query: Query)

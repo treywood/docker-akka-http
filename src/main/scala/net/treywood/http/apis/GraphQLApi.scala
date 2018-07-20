@@ -8,7 +8,7 @@ import akka.http.scaladsl.server.Directives._
 import akka.pattern.ask
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.{Flow, Sink, Source}
-import net.treywood.actor.{GraphQLActor, Query}
+import net.treywood.actor.{GraphQLActor, Query, Subscription}
 import net.treywood.http.{JsonSupport, Main}
 import sangria.ast.{Document, Field, OperationType}
 import sangria.parser.QueryParser
@@ -96,7 +96,7 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
                               val defs = Vector(op :: query.fragments.values.toList :_*)
 
                               val variables = payloadFields.getOrElse("variables", JsObject.empty).asJsObject
-                              f.name -> Query(id, Document(defs), variables)
+                              f.name -> Subscription(id, Query(Document(defs), variables))
                           })
                       }).flatten.toMap
 
@@ -110,6 +110,9 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
                   ref ! """{"type":"error","message":"Invalid Query"}"""
               })
             })
+
+          case (Some(JsString("stop")), Some(JsString(id))) =>
+            graphqlActor ! StopSubscription(id)
 
           case _ => ref ! """{"type":"dunno"}"""
         }
