@@ -10,7 +10,7 @@ import net.treywood.http.apis.GreetApi
 
 object Main extends App {
 
-  lazy val PORT = 8080
+  lazy val PORT = 8888
   lazy implicit val system: ActorSystem = ActorSystem("http-server")
   lazy implicit val materializer: ActorMaterializer = ActorMaterializer()
 

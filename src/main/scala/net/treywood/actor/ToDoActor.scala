@@ -26,18 +26,20 @@ object ToDoActor {
   def getAll = items.values.toSeq
 
   def newItems: Source[Option[ToDoItem], NotUsed] =
-    Source.queue[Option[ToDoItem]](0, OverflowStrategy.backpressure)
-      .mapMaterializedValue({ queue =>
-        newQueue.foreach(x => queue.offer(Option(x)))
-        NotUsed
-      })
+    if (newQueue.isEmpty) Source.single(None) else
+      Source.queue[Option[ToDoItem]](0, OverflowStrategy.backpressure)
+        .mapMaterializedValue({ queue =>
+          newQueue.foreach(x => queue.offer(Option(x)))
+          NotUsed
+        })
 
   def updatedItems: Source[Option[ToDoItem], NotUsed] =
-    Source.queue[Option[ToDoItem]](0, OverflowStrategy.backpressure)
-      .mapMaterializedValue({ queue =>
-        updateQueue.foreach(x => queue.offer(Option(x)))
-        NotUsed
-      })
+    if (updateQueue.isEmpty) Source.single(None) else
+      Source.queue[Option[ToDoItem]](0, OverflowStrategy.backpressure)
+        .mapMaterializedValue({ queue =>
+          updateQueue.foreach(x => queue.offer(Option(x)))
+          NotUsed
+        })
 
 }
 
@@ -53,6 +55,7 @@ class ToDoActor extends Actor {
     case NotifyEnd(field) => field match {
       case "newItem" => newQueue.clear()
       case "updatedItem" => updateQueue.clear()
+      case _ =>
     }
   }
 
@@ -73,7 +76,7 @@ class ToDoActor extends Actor {
     GraphQLApi.notify("todos")
   }
 
-  private def toggleDone(id: String, done: Boolean) = {
+  private def toggleDone(id: String, done: Boolean): Option[ToDoItem] = {
     val item = items.get(id).map({ item =>
       val updated = item.copy(done = done)
       items = items.updated(id, updated)

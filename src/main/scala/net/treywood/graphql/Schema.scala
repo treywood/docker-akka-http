@@ -52,7 +52,7 @@ object Schema {
           resolve = ctx => {
             val id = ctx arg idArg
             val done = ctx arg doneArg
-            (Context.toDoActor ? ToDoActor.ToggleDone(id, done)).mapTo[ToDoItem]
+            (Context.toDoActor ? ToDoActor.ToggleDone(id, done)).mapTo[Option[ToDoItem]]
           }
         )
       )

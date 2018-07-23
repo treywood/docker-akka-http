@@ -21,10 +21,9 @@ const http = createHttpLink({
   }
 });
 
-const ws =  new WebSocketLink(
-  new SubscriptionClient('ws://localhost:8080/graphql', { reconnect: true })
+const ws = new WebSocketLink(
+  new SubscriptionClient('ws://localhost:8888/graphql', { reconnect: true })
 );
-
 
 const apollo = new ApolloClient({
   link: new RetryLink().split(
