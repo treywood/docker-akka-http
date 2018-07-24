@@ -65,9 +65,6 @@ object Schema {
   lazy val Subscription = ObjectType(
     "Subscription",
     () => fields[Context, Unit](
-      Field.subs("todos", ListType(ToDoItemType),
-        resolve = _ => Source.single(action[Seq[ToDoItem]](ToDoActor.getAll))
-      ),
       Field.subs("newItem", OptionType(ToDoItemType),
         resolve = _ => ToDoActor.newItems.map(action[Option[ToDoItem]])
       ),

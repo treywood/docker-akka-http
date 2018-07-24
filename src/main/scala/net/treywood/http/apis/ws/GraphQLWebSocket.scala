@@ -1,20 +1,18 @@
 package net.treywood.http.apis.ws
 
 import akka.NotUsed
-import akka.actor.{Actor, ActorRef, PoisonPill, Props, Terminated}
+import akka.actor.{Actor, ActorRef, PoisonPill, Props}
 import akka.http.scaladsl.model.ws.TextMessage
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.{Flow, Sink, Source}
-import net.treywood.actor.GraphQLActor.{Notify, Subscribe, Unsubscribe}
 import net.treywood.graphql.GraphQLExecutor
 import net.treywood.http.apis.GraphQLApi
 import net.treywood.http.apis.GraphQLApi.timeout
 import net.treywood.http.{JsonSupport, Main}
-import sangria.ast.{Document, Field, OperationType}
+import sangria.ast.{Document, OperationType}
 import sangria.parser.QueryParser
 import spray.json.{JsObject, JsString, JsValue, _}
 
-import scala.collection.mutable
 import scala.concurrent.Await
 import scala.util.{Failure, Success}
 
@@ -29,26 +27,6 @@ object GraphQLWebSocket {
 
   class WsActor extends Actor with JsonSupport {
     import WsActor._
-
-    private val subs: mutable.Map[String, Subscription] = mutable.Map.empty
-    private def subsByField =
-      subs.foldLeft(Map.empty[String, Set[Subscription]])({
-        case (map, (_, sub)) =>
-          val fields = sub.query.astQuery.operations.flatMap({
-            case (_, op) => op.selections.collect({ case f: Field => f.name })
-          })
-          fields.foldLeft(map)({
-            case (m, f) =>
-              val set = map.getOrElse(f, Set.empty[Subscription])
-              m.updated(f, set + sub)
-          })
-      })
-
-    def printSubs() = {
-      subsByField.foreach({
-        case (field, ss) => println(s"$field: ${ss.size}")
-      })
-    }
 
     def waiting: Receive = {
       case NewSubscription(ref) =>
@@ -78,24 +56,25 @@ object GraphQLWebSocket {
                   QueryParser.parse(queryStr) match {
                     case Success(astQuery) =>
 
-                      subs ++= astQuery.operations.collect({
+                      astQuery.operations.collect({
                         case (_, op) if op.operationType == OperationType.Subscription =>
+                          import Main.materializer
+                          import sangria.streaming.akkaStreams._
+                          implicit val scheme = sangria.execution.ExecutionScheme.Stream
 
                           val variables = payloadFields.getOrElse("variables", JsObject.empty).asJsObject
                           val defs = (op :: astQuery.fragments.values.toList).toVector
 
                           val query = Query(Document(defs), variables)
-                          val sub = Subscription(id, query)
-
-                          val resultJson =
-                            GraphQLExecutor.executeQuery(query)
-                              .map(_.toJson).map(sub.wrap(_).compactPrint)
-                          ref ! Await.result(resultJson, timeout.duration)
-
-                          id -> sub
+                          val source = GraphQLExecutor.executeQuery(query).map({ r =>
+                            JsObject(Map(
+                              "id" -> JsString(id),
+                              "type" -> JsString("data"),
+                              "payload" -> r.toJson
+                            )).compactPrint
+                          })
+                          source.runWith(Sink.actorRef(ref, PoisonPill))
                       })
-                      printSubs()
-                      graphQLActor ! Subscribe
 
                     case Failure(e) =>
                       ref ! s"""{"type":"error","message":"${e.getMessage}"}"""
@@ -106,26 +85,9 @@ object GraphQLWebSocket {
             })
 
           case (Some(JsString("stop")), Some(JsString(id))) =>
-            subs -= id
-            printSubs()
 
           case _ => ref ! """{"type":"dunno"}"""
         }
-
-      case Terminated(subject) =>
-        println("TERMINATED")
-        printSubs()
-        self ! PoisonPill
-
-      // response from GraphQLActor
-      case Notify(field) =>
-        for {
-          subs <- subsByField.get(field)
-          sub <- subs
-        } ref ! sub.execute.compactPrint
-
-      case PoisonPill =>
-        graphQLActor ! Unsubscribe
 
     }
 
@@ -150,22 +112,6 @@ object GraphQLWebSocket {
     Flow.fromSinkAndSource(incoming, outgoing)
   }
 
-  case class Query(astQuery: Document, variables: JsObject) {
-    override def toString: String = astQuery.toString + ":" + variables.compactPrint
-  }
-  case class Subscription(id: String, query: Query) extends JsonSupport {
-
-    def wrap(json: JsValue, `type`: String = "data") =
-      JsObject(Map(
-        "id" -> JsString(id),
-        "payload" -> json,
-        "type" -> JsString(`type`)
-      ))
-
-    def execute = {
-      val result = GraphQLExecutor.executeQuery(query)
-      Await.result(result.map(r => wrap(r.toJson)), timeout.duration)
-    }
-  }
+  case class Query(astQuery: Document, variables: JsObject)
 
 }

@@ -1,10 +1,9 @@
 package net.treywood.actor
 
 import akka.NotUsed
-import akka.actor.Actor
+import akka.actor.{Actor, ActorRef}
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Source
-import net.treywood.actor.GraphQLActor.{Notify, NotifyEnd}
 import net.treywood.http.apis.GraphQLApi
 import net.treywood.http.apis.ToDoApi.ToDoItem
 
@@ -18,28 +17,26 @@ object ToDoActor {
   case class DeleteItem(id: String)
   case class FetchItem(id: String)
 
-  private val newQueue = mutable.Queue.empty[ToDoItem]
-  private val updateQueue = mutable.Queue.empty[ToDoItem]
-
   private var items = Map.empty[String, ToDoItem]
 
   def getAll = items.values.toSeq
 
+  private val newItemSubs = mutable.Set.empty[ActorRef]
+  private val updatedItemSubs = mutable.Set.empty[ActorRef]
+
   def newItems: Source[Option[ToDoItem], NotUsed] =
-    if (newQueue.isEmpty) Source.single(None) else
-      Source.queue[Option[ToDoItem]](0, OverflowStrategy.backpressure)
-        .mapMaterializedValue({ queue =>
-          newQueue.foreach(x => queue.offer(Option(x)))
-          NotUsed
-        })
+    Source.actorRef[Option[ToDoItem]](0, OverflowStrategy.fail)
+      .mapMaterializedValue(ref => {
+        newItemSubs += ref
+        NotUsed
+      })
 
   def updatedItems: Source[Option[ToDoItem], NotUsed] =
-    if (updateQueue.isEmpty) Source.single(None) else
-      Source.queue[Option[ToDoItem]](0, OverflowStrategy.backpressure)
-        .mapMaterializedValue({ queue =>
-          updateQueue.foreach(x => queue.offer(Option(x)))
-          NotUsed
-        })
+    Source.actorRef(0, OverflowStrategy.fail)
+      .mapMaterializedValue(ref => {
+        updatedItemSubs += ref
+        NotUsed
+      })
 
 }
 
@@ -51,37 +48,26 @@ class ToDoActor extends Actor {
     case DeleteItem(id) => sender ! deleteItem(id)
     case ToggleDone(id, done) => sender ! toggleDone(id, done)
     case FetchItem(id) => sender ! fetchItem(id)
-
-    case NotifyEnd(field) => field match {
-      case "newItem" => newQueue.clear()
-      case "updatedItem" => updateQueue.clear()
-      case _ =>
-    }
   }
 
   private def addItem(label: String) = {
     val newId = Random.alphanumeric.take(10).mkString
     val newItem = ToDoItem(newId, label)
 
-    newQueue.enqueue(newItem)
-    GraphQLApi.graphqlActor ! Notify("newItem")
-
+    newItemSubs.foreach(_ ! Option(newItem))
     items += (newId -> newItem)
-    GraphQLApi.graphqlActor ! Notify("todos")
     newItem
   }
 
   private def deleteItem(id: String) = {
     items -= id
-    GraphQLApi.notify("todos")
   }
 
   private def toggleDone(id: String, done: Boolean): Option[ToDoItem] = {
     val item = items.get(id).map({ item =>
       val updated = item.copy(done = done)
       items = items.updated(id, updated)
-      updateQueue.enqueue(updated)
-      GraphQLApi.graphqlActor ! Notify("updatedItem")
+      updatedItemSubs.foreach(_ ! Option(updated))
       updated
     })
     item

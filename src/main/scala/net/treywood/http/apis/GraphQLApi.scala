@@ -39,8 +39,4 @@ object GraphQLApi extends Api("graphql") with JsonSupport {
 
   lazy val graphqlActor = net.treywood.http.Main.system.actorOf(Props[GraphQLActor])
 
-  def notify(field: String) = {
-    graphqlActor ! Notify(field)
-  }
-
 }
