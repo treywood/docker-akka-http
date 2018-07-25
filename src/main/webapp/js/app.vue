@@ -7,8 +7,12 @@
                 </md-card-header>
                 <md-card-content>
                     <md-list>
-                        <md-list-item v-for="todo in todos" :key="todo.id">
+                        <md-list-item class="md-no-proxy to-do" v-for="todo in todos" :key="todo.id">
                             <md-checkbox :value="!todo.done" @change="update(todo)">{{todo.label}}</md-checkbox>
+
+                            <md-button class="delete md-icon-button md-list-action" @click.stop="deleteItem(todo)">
+                                <md-icon>delete</md-icon>
+                            </md-button>
                         </md-list-item>
                     </md-list>
                     <md-field>
@@ -52,5 +56,18 @@
           this.$store.dispatch('toggle', item);
         }
 
+        deleteItem(item) {
+          this.$store.dispatch('delete', item);
+        }
+
     }
 </script>
+
+<style>
+    i.delete {
+        opacity: 0;
+    }
+    .to-do:hover i.delete {
+        opacity: 1;
+    }
+</style>

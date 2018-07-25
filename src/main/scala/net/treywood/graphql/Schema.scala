@@ -58,19 +58,12 @@ object Schema {
       )
     )
 
-  private type SubValue[T] = Action[Context,T]
-
-  private def action[T](x: T): Action[Context, T] = Value[Context, T](x)
-
   lazy val Subscription = ObjectType(
     "Subscription",
     () => fields[Context, Unit](
-      Field.subs("newItem", OptionType(ToDoItemType),
-        resolve = _ => ToDoActor.newItems.map(action[Option[ToDoItem]])
-      ),
-      Field.subs("updatedItem", OptionType(ToDoItemType),
-        resolve = _ => ToDoActor.updatedItems.map(action[Option[ToDoItem]])
-      )
+      Field.subs("newItem", ToDoItemType, resolve = _ => ToDoItemAdded.subscription),
+      Field.subs("updatedItem", ToDoItemType, resolve = _ => ToDoItemUpdated.subscription),
+      Field.subs("deletedItem", ToDoItemType, resolve = _ => ToDoItemDeleted.subscription)
     )
   )
 

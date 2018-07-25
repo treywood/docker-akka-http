@@ -3,7 +3,7 @@ import Vuex from 'vuex';
 import ApolloClient from 'apollo-client';
 import { createHttpLink } from 'apollo-link-http';
 import { InMemoryCache } from 'apollo-cache-inmemory';
-import { GetToDos, AddItem, DeleteItem, UpdateItem, UpdatedToDos, NewToDos } from './queries.graphql';
+import { GetToDos, AddItem, DeleteItem, UpdateItem, UpdatedToDos, NewToDos, DeletedToDos } from './queries.graphql';
 import { merge } from 'rxjs/observable/merge';
 import fetch from 'unfetch';
 import { WebSocketLink } from 'apollo-link-ws';
@@ -50,6 +50,9 @@ export default new Vuex.Store({
     add: (state, item) => {
       state.todos = [...state.todos, item];
     },
+    delete: (state, item) => {
+      state.todos = state.todos.filter(i => i.id !== item.id);
+    },
     update: (state, item) => {
       state.todos = state.todos.map(i => i.id === item.id ? item : i);
     }
@@ -65,10 +68,12 @@ export default new Vuex.Store({
     watch({ commit }) {
       const sub = merge(
         apollo.subscribe({ query: NewToDos }),
-        apollo.subscribe({ query: UpdatedToDos })
+        apollo.subscribe({ query: UpdatedToDos }),
+        apollo.subscribe({ query: DeletedToDos })
       ).subscribe(({ data }) => {
         if (data.new) return commit('add', data.new);
         if (data.updated) return commit('update', data.updated);
+        if (data.deleted) return commit('delete', data.deleted);
       });
       window.SOCKETS.push(sub);
       return sub;
@@ -87,6 +92,12 @@ export default new Vuex.Store({
     },
     toggle({ dispatch }, item) {
       return dispatch('update', { ...item, done: !item.done });
+    },
+    delete({ commit }, item) {
+      const variables = { id: item.id };
+      return apollo.mutate({ mutation: DeleteItem, variables }).then(({ data }) => {
+        return data.deleted;
+      });
     }
   }
 

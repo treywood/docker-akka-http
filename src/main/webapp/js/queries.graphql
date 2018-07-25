@@ -18,6 +18,11 @@ subscription UpdatedToDos {
         ...ToDoFields
     }
 }
+subscription DeletedToDos {
+    deleted: deletedItem {
+        ...ToDoFields
+    }
+}
 
 mutation AddItem($label: String!) {
     item: createToDoItem(label: $label) {

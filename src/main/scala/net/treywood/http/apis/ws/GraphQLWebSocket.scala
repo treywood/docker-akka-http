@@ -7,17 +7,14 @@ import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.{Flow, Sink, Source}
 import net.treywood.graphql.GraphQLExecutor
 import net.treywood.http.apis.GraphQLApi
-import net.treywood.http.apis.GraphQLApi.timeout
 import net.treywood.http.{JsonSupport, Main}
 import sangria.ast.{Document, OperationType}
 import sangria.parser.QueryParser
-import spray.json.{JsObject, JsString, JsValue, _}
+import spray.json.{JsObject, JsString, _}
 
-import scala.concurrent.Await
 import scala.util.{Failure, Success}
 
 object GraphQLWebSocket {
-  import Main.system.dispatcher
 
   lazy val graphQLActor = GraphQLApi.graphqlActor
 
@@ -73,7 +70,7 @@ object GraphQLWebSocket {
                               "payload" -> r.toJson
                             )).compactPrint
                           })
-                          source.runWith(Sink.actorRef(ref, PoisonPill))
+                          source.runWith(Sink.actorRef(ref, Complete(id)))
                       })
 
                     case Failure(e) =>
@@ -90,6 +87,12 @@ object GraphQLWebSocket {
         }
 
     }
+
+    private def Complete(id: String)=
+      JsObject(Map(
+        "id" -> JsString(id),
+        "type" -> JsString("complete")
+      )).compactPrint
 
     def receive = waiting
 

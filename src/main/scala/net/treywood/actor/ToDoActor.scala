@@ -1,13 +1,9 @@
 package net.treywood.actor
 
-import akka.NotUsed
-import akka.actor.{Actor, ActorRef}
-import akka.stream.OverflowStrategy
-import akka.stream.scaladsl.Source
-import net.treywood.http.apis.GraphQLApi
+import akka.actor.Actor
+import net.treywood.graphql.{ToDoItemAdded, ToDoItemDeleted, ToDoItemUpdated}
 import net.treywood.http.apis.ToDoApi.ToDoItem
 
-import scala.collection.mutable
 import scala.util.Random
 
 object ToDoActor {
@@ -20,24 +16,6 @@ object ToDoActor {
   private var items = Map.empty[String, ToDoItem]
 
   def getAll = items.values.toSeq
-
-  private val newItemSubs = mutable.Set.empty[ActorRef]
-  private val updatedItemSubs = mutable.Set.empty[ActorRef]
-
-  def newItems: Source[Option[ToDoItem], NotUsed] =
-    Source.actorRef[Option[ToDoItem]](0, OverflowStrategy.fail)
-      .mapMaterializedValue(ref => {
-        newItemSubs += ref
-        NotUsed
-      })
-
-  def updatedItems: Source[Option[ToDoItem], NotUsed] =
-    Source.actorRef(0, OverflowStrategy.fail)
-      .mapMaterializedValue(ref => {
-        updatedItemSubs += ref
-        NotUsed
-      })
-
 }
 
 class ToDoActor extends Actor {
@@ -54,12 +32,13 @@ class ToDoActor extends Actor {
     val newId = Random.alphanumeric.take(10).mkString
     val newItem = ToDoItem(newId, label)
 
-    newItemSubs.foreach(_ ! Option(newItem))
+    ToDoItemAdded.next(newItem)
     items += (newId -> newItem)
     newItem
   }
 
   private def deleteItem(id: String) = {
+    items.get(id).foreach(ToDoItemDeleted.next)
     items -= id
   }
 
@@ -67,7 +46,7 @@ class ToDoActor extends Actor {
     val item = items.get(id).map({ item =>
       val updated = item.copy(done = done)
       items = items.updated(id, updated)
-      updatedItemSubs.foreach(_ ! Option(updated))
+      ToDoItemUpdated.next(updated)
       updated
     })
     item
